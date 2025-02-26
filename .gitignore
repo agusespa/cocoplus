@@ -50,3 +50,14 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+/build/
+/.cache/
+*/build/
+*/.cache/
+
+# ESP-IDF specific
+sdkconfig
+sdkconfig.ci
+
+# misc
+.DS_Store
