@@ -5,12 +5,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(MOSQUITTO_INCLUDE_DIR "/opt/homebrew/include")
-set(MOSQUITTO_LIBRARY "/opt/homebrew/Cellar/mosquitto/2.0.20/lib/libmosquitto.dylib")
+set(MOSQUITTO_LIBRARY "/opt/homebrew/Cellar/mosquitto/2.0.21/lib/libmosquitto.dylib")
 
 find_package(GTest REQUIRED)
 
 include_directories(${MOSQUITTO_INCLUDE_DIR})
-link_directories("/opt/homebrew/Cellar/mosquitto/2.0.20/lib")
+link_directories("/opt/homebrew/Cellar/mosquitto/2.0.21/lib")
 
 # Main application
 add_executable(robot_controller src/main.cpp src/mqtt_client.cpp)

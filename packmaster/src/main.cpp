@@ -4,7 +4,9 @@
 #include "../include/mqtt_client.h"
 
 void message_handler(const std::string& topic, const std::string& message) {
-    std::cout << "Received on [" << topic << "]: " << message << std::endl;
+    std::cout << std::endl
+              << "[[ Received on " << topic << ": " << message << " ]]"
+              << std::endl;
 }
 
 int main() {
@@ -17,7 +19,7 @@ int main() {
 
     mqtt_client.set_message_callback(message_handler);
 
-    mqtt_client.subscribe("robot/commands");
+    mqtt_client.subscribe("cocoplus/health");
 
     mqtt_client.loop_start();
 
@@ -28,7 +30,7 @@ int main() {
 
         if (command == "exit") break;
 
-        mqtt_client.publish("robot/command", command);
+        mqtt_client.publish("controller/command", command);
     }
 
     mqtt_client.loop_stop();
