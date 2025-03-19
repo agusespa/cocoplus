@@ -10,9 +10,9 @@
 enum class AppMode { MONITOR, CONTROLLER };
 
 std::mutex health_mutex;
-std::string last_health_message;
-std::chrono::time_point<std::chrono::steady_clock> last_health_timestamp;
+std::chrono::time_point<std::chrono::steady_clock> last_message_timestamp;
 std::atomic<bool> first_message_received(false);
+int ROBOT_MESSAGE_MAX_INTERVAL = 20;
 
 std::string get_timestamp() {
     auto now =
@@ -30,15 +30,16 @@ std::string get_log_timestamp() {
     return timeString;
 }
 
-void controller_health_handler(const std::string& message) {
+void update_message_recv() {
     std::lock_guard<std::mutex> lock(health_mutex);
-
-    last_health_message = message;
-    last_health_timestamp = std::chrono::steady_clock::now();
-
     if (!first_message_received) {
         first_message_received = true;
     }
+    last_message_timestamp = std::chrono::steady_clock::now();
+}
+
+void controller_health_handler(const std::string& message) {
+    update_message_recv();
 
     if (message.find("error") != std::string::npos) {
         std::cout << std::endl;
@@ -48,6 +49,7 @@ void controller_health_handler(const std::string& message) {
 }
 
 void controller_data_handler(const std::string& message) {
+    update_message_recv();
     // TODO pending implementation
 }
 
@@ -74,7 +76,7 @@ std::atomic<bool> running(true);
 
 void health_monitor() {
     while (running) {
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(10));
 
         if (!first_message_received) {
             continue;
@@ -83,15 +85,15 @@ void health_monitor() {
         std::lock_guard<std::mutex> lock(health_mutex);
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                           now - last_health_timestamp)
+                           now - last_message_timestamp)
                            .count();
 
-        if (elapsed > 20) {
+        if (elapsed > ROBOT_MESSAGE_MAX_INTERVAL) {
             std::cout << std::endl;
-            std::cout << "[" << get_log_timestamp()
-                      << "] ALERT: Robot hasn't reported vitals for longer "
-                         "that 20 seconds!"
-                      << std::endl;
+            std::cout
+                << "[" << get_log_timestamp()
+                << "] ALERT: Robot hasn't publish messages for longer than "
+                << ROBOT_MESSAGE_MAX_INTERVAL << " seconds!" << std::endl;
         }
     }
 }
