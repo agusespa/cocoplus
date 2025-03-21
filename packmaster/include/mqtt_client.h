@@ -1,6 +1,4 @@
-#ifndef MQTT_CLIENT_H
-#define MQTT_CLIENT_H
-
+#pragma once
 #include <mosquitto.h>
 
 #include <functional>
@@ -8,38 +6,36 @@
 #include <unordered_map>
 
 class MqttClient {
-   public:
-    using MessageCallback =
-        std::function<void(const std::string&, const std::string&)>;
-    using TopicHandler = std::function<void(const std::string&)>;
+  public:
+   using MessageCallback =
+       std::function<void(const std::string&, const std::string&)>;
+   using TopicHandler = std::function<void(const std::string&)>;
 
-    MqttClient(const std::string& client_id, const std::string& host, int port);
-    ~MqttClient();
+   MqttClient(const std::string& client_id, const std::string& host, int port);
+   ~MqttClient();
 
-    bool connect();
-    void disconnect();
-    void loop_start();
-    void loop_stop();
+   bool connect();
+   void disconnect();
+   void loop_start();
+   void loop_stop();
 
-    void publish(const std::string& topic, const std::string& message);
-    void subscribe(const std::string& topic);
+   void publish(const std::string& topic, const std::string& message);
+   void subscribe(const std::string& topic);
 
-    void set_message_callback(MessageCallback callback);
+   void set_message_callback(MessageCallback callback);
 
-    void register_handler(const std::string& topic, TopicHandler handler);
-    void remove_handler(const std::string& topic);
-    bool has_handler(const std::string& topic) const;
+   void register_handler(const std::string& topic, TopicHandler handler);
+   void remove_handler(const std::string& topic);
+   bool has_handler(const std::string& topic) const;
 
-   private:
-    struct mosquitto* mosq;
-    std::string host;
-    int port;
+  private:
+   struct mosquitto* mosq;
+   std::string host;
+   int port;
 
-    MessageCallback message_callback;
-    std::unordered_map<std::string, TopicHandler> topic_handlers;
-    static void on_message_wrapper(struct mosquitto* mosq, void* userdata,
-                                   const struct mosquitto_message* message);
-    void process_message(const std::string& topic, const std::string& message);
+   MessageCallback message_callback;
+   std::unordered_map<std::string, TopicHandler> topic_handlers;
+   static void on_message_wrapper(struct mosquitto* mosq, void* userdata,
+                                  const struct mosquitto_message* message);
+   void process_message(const std::string& topic, const std::string& message);
 };
-
-#endif  // MQTT_CLIENT_H

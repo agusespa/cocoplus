@@ -1,142 +1,11 @@
-#include <atomic>
-#include <chrono>
-#include <ctime>
 #include <iostream>
 #include <string>
-#include <thread>
 
+#include "../include/controller.h"
+#include "../include/monitor.h"
 #include "../include/mqtt_client.h"
 
 enum class AppMode { MONITOR, CONTROLLER };
-
-std::mutex health_mutex;
-std::chrono::time_point<std::chrono::steady_clock> last_message_timestamp;
-std::atomic<bool> first_message_received(false);
-int ROBOT_MESSAGE_MAX_INTERVAL = 20;
-
-std::string get_timestamp() {
-    auto now =
-        std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    return std::ctime(&now);
-}
-
-std::string get_log_timestamp() {
-    auto now = get_timestamp();
-
-    std::string timeString(now);
-    if (!timeString.empty() && timeString.back() == '\n') {
-        timeString.pop_back();
-    }
-    return timeString;
-}
-
-void update_message_recv() {
-    std::lock_guard<std::mutex> lock(health_mutex);
-    if (!first_message_received) {
-        first_message_received = true;
-    }
-    last_message_timestamp = std::chrono::steady_clock::now();
-}
-
-void controller_health_handler(const std::string& message) {
-    update_message_recv();
-
-    if (message.find("error") != std::string::npos) {
-        std::cout << std::endl;
-        std::cout << "[" << get_log_timestamp()
-                  << "] ALERT: Robot reported an error condition!" << std::endl;
-    }
-}
-
-void controller_data_handler(const std::string& message) {
-    update_message_recv();
-    // TODO pending implementation
-}
-
-void monitor_message_handler(const std::string& topic,
-                             const std::string& message) {
-    std::cout << "[" << get_log_timestamp() << "] RECV: " << topic << " - "
-              << message << std::endl;
-}
-
-void run_monitor_mode(MqttClient& mqtt_client) {
-    std::cout << "Listening... Press Enter to exit" << std::endl;
-
-    mqtt_client.set_message_callback(monitor_message_handler);
-
-    mqtt_client.subscribe("cocoplus/health");
-    mqtt_client.subscribe("cocoplus/data");
-
-    mqtt_client.loop_start();
-
-    std::cin.get();
-}
-
-std::atomic<bool> running(true);
-
-void health_monitor() {
-    while (running) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-
-        if (!first_message_received) {
-            continue;
-        }
-
-        std::lock_guard<std::mutex> lock(health_mutex);
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-                           now - last_message_timestamp)
-                           .count();
-
-        if (elapsed > ROBOT_MESSAGE_MAX_INTERVAL) {
-            std::cout << std::endl;
-            std::cout
-                << "[" << get_log_timestamp()
-                << "] ALERT: Robot hasn't publish messages for longer than "
-                << ROBOT_MESSAGE_MAX_INTERVAL << " seconds!" << std::endl;
-        }
-    }
-}
-
-void run_controller_mode(MqttClient& mqtt_client) {
-    std::cout << "Available commands:" << std::endl;
-    std::cout << "  start    - Start the robot" << std::endl;
-    std::cout << "  stop     - Stop the robot" << std::endl;
-    std::cout << "  shutdown - Shutdown the robot and exit" << std::endl;
-
-    mqtt_client.register_handler("cocoplus/health", controller_health_handler);
-    mqtt_client.register_handler("cocoplus/data", controller_data_handler);
-
-    mqtt_client.subscribe("cocoplus/health");
-    mqtt_client.subscribe("cocoplus/data");
-
-    mqtt_client.loop_start();
-
-    std::thread health_thread(health_monitor);
-
-    std::string command;
-    while (true) {
-        std::cout << "> ";
-        std::getline(std::cin, command);
-
-        if (command.empty()) {
-            continue;
-        }
-
-        if (command == "start" || command == "stop" || command == "shutdown") {
-            mqtt_client.publish("controller/command", command);
-
-            if (command == "shutdown") {
-                std::cout << "Shutting down and exiting..." << std::endl;
-                running = false;
-                health_thread.join();
-                break;
-            }
-        } else {
-            std::cout << "Unknown command. Please try again." << std::endl;
-        }
-    }
-}
 
 int main(int argc, char* argv[]) {
     AppMode mode = AppMode::CONTROLLER;
@@ -169,9 +38,11 @@ int main(int argc, char* argv[]) {
     std::cout << "Connected to MQTT broker" << std::endl;
 
     if (mode == AppMode::MONITOR) {
-        run_monitor_mode(mqtt_client);
+        Monitor monitor(mqtt_client);
+        monitor.run();
     } else {
-        run_controller_mode(mqtt_client);
+        Controller controller(mqtt_client);
+        controller.run();
     }
 
     mqtt_client.loop_stop();
