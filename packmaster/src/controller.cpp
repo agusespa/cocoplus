@@ -16,7 +16,6 @@ void Controller::run() {
     mqtt_client.loop_start();
 
     RobotView robot_view(running);
-    robot_view.set_close_callback([this]() { running = false; });
 
     std::thread command_thread(&Controller::run_command_loop, this);
 

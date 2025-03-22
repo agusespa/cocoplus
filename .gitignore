@@ -53,6 +53,7 @@ dkms.conf
 /build/
 /.cache/
 */build/
+*/vendored/
 */.cache/
 
 # ESP-IDF specific
