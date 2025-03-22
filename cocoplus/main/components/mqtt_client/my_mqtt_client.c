@@ -99,6 +99,5 @@ void mqtt_publish(const char *topic, const char *message) {
         ESP_LOGE(TAG, "Cannot publish: MQTT client not initialized");
         return;
     }
-    int msg_id = esp_mqtt_client_publish(client, topic, message, 0, 0, 0);
-    ESP_LOGI(TAG, "Published message to %s, msg_id=%d", topic, msg_id);
+    esp_mqtt_client_publish(client, topic, message, 0, 0, 0);
 }
