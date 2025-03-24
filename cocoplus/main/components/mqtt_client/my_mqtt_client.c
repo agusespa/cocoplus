@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "../../cocoplus_main.h"
 #include "esp_log.h"
 
 static const char *TAG = "MQTT_CLIENT";
@@ -43,9 +44,24 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                 memcpy(topic_buf, event->topic, event->topic_len);
                 topic_buf[event->topic_len] = '\0';
 
+                char message_buf[event->data_len + 1];
+                memcpy(message_buf, event->data, event->data_len);
+                message_buf[event->data_len] = '\0';
+
                 if (strcmp(topic_buf, COMMAND_TOPIC) == 0) {
-                    ESP_LOGI(TAG, "Message data: %.*s", event->data_len,
-                             event->data);
+                    ESP_LOGI(TAG, "Message data: %s", message_buf);
+
+                    if (strcmp(message_buf, "start") == 0) {
+                        if (xSemaphoreTake(controller_mutex, portMAX_DELAY)) {
+                            should_stop = false;
+                            xSemaphoreGive(controller_mutex);
+                        }
+                    } else if (strcmp(message_buf, "stop") == 0) {
+                        if (xSemaphoreTake(controller_mutex, portMAX_DELAY)) {
+                            should_stop = true;
+                            xSemaphoreGive(controller_mutex);
+                        }
+                    }
                 }
             } else {
                 ESP_LOGE(TAG, "Received message, but topic or data was null");

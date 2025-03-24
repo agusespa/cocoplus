@@ -1,13 +1,13 @@
+#include "cocoplus_main.h"
+
 #include <stdio.h>
 
 #include "components/mqtt_client/my_mqtt_client.h"
 #include "components/wifi_utils/wifi_utils.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
-#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
@@ -17,6 +17,18 @@ static const char* TAG = "COCO_MAIN";
 #define ECHO_PIN GPIO_NUM_15
 #define SOUND_SPEED 0.034
 #define TIMEOUT_US 50000
+
+static const char* SENSOR_DATA_TOPIC = "cocoplus/data";
+static const char* HEALTH_TOPIC = "cocoplus/health";
+
+static TaskHandle_t obstacle_avoidance_task_handle = NULL;
+static TaskHandle_t mqtt_publish_task_handle = NULL;
+
+static float latest_distance = 0.0;
+static SemaphoreHandle_t distance_mutex;
+
+bool should_stop = true;
+SemaphoreHandle_t controller_mutex;
 
 void send_pulse() {
     gpio_set_level(TRIG_PIN, 1);
@@ -62,20 +74,44 @@ void log_pub_error_message(esp_err_t ret) {
     }
 
     ESP_LOGE(TAG, "%s", error_message);
-    mqtt_publish("cocoplus/health", error_message);
+    mqtt_publish(HEALTH_TOPIC, error_message);
 }
 
-void publish_data(float distance) {
-    static int64_t last_publish_time = 0;
-    int64_t now = esp_timer_get_time();
+void obstacle_avoidance_task(void* pvParameters) {
+    while (1) {
+        if (should_stop) {
+            // TODO: implement start/stop
+            /* stop_movement(); */
+        } else {
+            send_pulse();
+            uint32_t pulse_duration = measure_pulse();
+            float distance = (pulse_duration * SOUND_SPEED) / 2.0;
 
-    if (now - last_publish_time >= 1000000) {
-        last_publish_time = now;
+            if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
+                latest_distance = distance;
+                xSemaphoreGive(distance_mutex);
+            }
 
-        char message[256];
+            // TODO: Implement logic to control the car's movement
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void mqtt_publish_task(void* pvParameters) {
+    float distance = 0.0;
+
+    while (1) {
+        if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
+            distance = latest_distance;
+            xSemaphoreGive(distance_mutex);
+        }
+
+        char message[50];
         snprintf(message, sizeof(message), "f:%.2f", distance);
-        // TODO send health message if this fails
-        mqtt_publish("cocoplus/data", message);
+        mqtt_publish(SENSOR_DATA_TOPIC, message);
+
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
@@ -123,14 +159,23 @@ void app_main() {
         return;
     }
 
-    mqtt_publish("cocoplus/health", "startup completed successfully");
-
-    while (1) {
-        send_pulse();
-        uint32_t pulse_duration = measure_pulse();
-        float distance = (pulse_duration * SOUND_SPEED) / 2.0;
-        publish_data(distance);
-
-        vTaskDelay(pdMS_TO_TICKS(100));
+    distance_mutex = xSemaphoreCreateMutex();
+    if (distance_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create mutex");
+        return;
     }
+
+    controller_mutex = xSemaphoreCreateMutex();
+    if (controller_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create mutex");
+        return;
+    }
+
+    mqtt_publish(HEALTH_TOPIC, "startup completed successfully");
+
+    xTaskCreate(obstacle_avoidance_task, "ObstacleAvoidanceTask", 4096, NULL,
+                10, &obstacle_avoidance_task_handle);
+
+    xTaskCreate(mqtt_publish_task, "MQTTPublishTask", 4096, NULL, 3,
+                &mqtt_publish_task_handle);
 }
