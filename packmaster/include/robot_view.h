@@ -1,19 +1,23 @@
 #pragma once
 #include <SDL3/SDL.h>
-#include <atomic>
+#include <data_parser.h>
+
+#include "controller.h"
 
 class RobotView {
-public:
-    explicit RobotView(std::atomic<bool>& running_flag);
-    ~RobotView();
+ public:
+  RobotView(Controller& controller);
+  ~RobotView();
 
-    void start();
+  void start();
 
-private:
-    void render();
-    void handle_events();
+ private:
+  void handle_events();
+  void render();
+  void draw_data(const DataParser::Data& data);
 
-    std::atomic<bool>& running;
-    SDL_Window* window;
-    SDL_Renderer* renderer;
+  Controller& controller;
+
+  SDL_Window* window;
+  SDL_Renderer* renderer;
 };

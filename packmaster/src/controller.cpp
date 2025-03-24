@@ -2,8 +2,10 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include "../include/health_tracker.h"
+#include "../include/robot_view.h"
 
 Controller::Controller(MqttClient& mqtt_client)
     : mqtt_client(mqtt_client), running(true), health_tracker(running, 20) {}
@@ -15,7 +17,7 @@ void Controller::run() {
     mqtt_client.subscribe(MqttClient::DATA_TOPIC);
     mqtt_client.loop_start();
 
-    RobotView robot_view(running);
+    RobotView robot_view(*this);
 
     std::thread command_thread(&Controller::run_command_loop, this);
 
@@ -70,8 +72,7 @@ void Controller::data_handler(const std::string& message) {
     health_tracker.update_message_received();
 
     auto parsed_data = DataParser::parse(message);
-    std::cout << "Successfully parsed message:\n"
-              << "Left: " << parsed_data.left << "\n"
-              << "Front: " << parsed_data.front << "\n"
-              << "Right: " << parsed_data.right << std::endl;
+
+    std::lock_guard<std::mutex> lock(data_mutex);
+    current_data = parsed_data;
 }
