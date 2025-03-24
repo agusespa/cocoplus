@@ -11,8 +11,8 @@ Controller::Controller(MqttClient& mqtt_client)
 void Controller::run() {
     setup_mqtt_handlers();
 
-    mqtt_client.subscribe("cocoplus/health");
-    mqtt_client.subscribe("cocoplus/data");
+    mqtt_client.subscribe(MqttClient::HEALTH_TOPIC);
+    mqtt_client.subscribe(MqttClient::DATA_TOPIC);
     mqtt_client.loop_start();
 
     RobotView robot_view(running);
@@ -29,11 +29,11 @@ void Controller::run() {
 
 void Controller::setup_mqtt_handlers() {
     mqtt_client.register_handler(
-        "cocoplus/health",
+        MqttClient::HEALTH_TOPIC,
         [this](const std::string& message) { health_handler(message); });
 
     mqtt_client.register_handler(
-        "cocoplus/data",
+        MqttClient::DATA_TOPIC,
         [this](const std::string& message) { data_handler(message); });
 }
 
@@ -46,7 +46,7 @@ void Controller::run_command_loop() {
         std::getline(std::cin, command);
 
         if (command == "start" || command == "stop" || command == "shutdown") {
-            mqtt_client.publish("controller/command", command);
+            mqtt_client.publish(MqttClient::COMMAND_TOPIC, command);
             if (command == "shutdown") {
                 std::cout << "Shutting down..." << std::endl;
                 running = false;
@@ -68,5 +68,10 @@ void Controller::health_handler(const std::string& message) {
 
 void Controller::data_handler(const std::string& message) {
     health_tracker.update_message_received();
-    // Process data here when needed
+
+    auto parsed_data = DataParser::parse(message);
+    std::cout << "Successfully parsed message:\n"
+              << "Left: " << parsed_data.left << "\n"
+              << "Front: " << parsed_data.front << "\n"
+              << "Right: " << parsed_data.right << std::endl;
 }

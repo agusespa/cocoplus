@@ -25,14 +25,19 @@ set(ROBOT_CONTROLLER_SOURCES
     src/robot_view.cpp
     src/health_tracker.cpp
     src/mqtt_client.cpp
+    src/data_parser.cpp
 )
 
 add_library(mqtt_library 
     src/mqtt_client.cpp 
-    include/mqtt_client.h
 )
 target_include_directories(mqtt_library PUBLIC include)
 target_link_libraries(mqtt_library ${MOSQUITTO_LIBRARY})
+
+add_library(data_parser
+    src/data_parser.cpp
+)
+target_include_directories(data_parser PUBLIC include)
 
 add_executable(robot_controller ${ROBOT_CONTROLLER_SOURCES})
 target_link_libraries(robot_controller 
@@ -40,3 +45,5 @@ target_link_libraries(robot_controller
     Threads::Threads
     SDL3::SDL3
 )
+
+add_subdirectory(test)

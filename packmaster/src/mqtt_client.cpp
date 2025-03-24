@@ -2,6 +2,10 @@
 
 #include <iostream>
 
+const std::string MqttClient::HEALTH_TOPIC = "cocoplus/health";
+const std::string MqttClient::DATA_TOPIC = "cocoplus/data";
+const std::string MqttClient::COMMAND_TOPIC = "controller/command";
+
 MqttClient::MqttClient(const std::string &client_id, const std::string &host,
                        int port)
     : host(host), port(port), mosq(nullptr) {

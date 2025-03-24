@@ -13,8 +13,8 @@ void Monitor::run() {
             message_handler(topic, message);
         });
 
-    mqtt_client.subscribe("cocoplus/health");
-    mqtt_client.subscribe("cocoplus/data");
+    mqtt_client.subscribe(MqttClient::HEALTH_TOPIC);
+    mqtt_client.subscribe(MqttClient::DATA_TOPIC);
     mqtt_client.loop_start();
 
     std::cin.get(); // Terminate on Enter

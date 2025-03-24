@@ -1,6 +1,7 @@
 #pragma once
 #include "health_tracker.h"
 #include "mqtt_client.h"
+#include "data_parser.h"
 #include "robot_view.h"
 #include <atomic>
 #include <thread>
