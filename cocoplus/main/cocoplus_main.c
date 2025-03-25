@@ -99,19 +99,22 @@ void obstacle_avoidance_task(void* pvParameters) {
 }
 
 void mqtt_publish_task(void* pvParameters) {
-    float distance = 0.0;
+    float front_distance = 0.0;
+    float left_distance = 0.0;
+    float right_distance = 0.0;
 
     while (1) {
         if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
-            distance = latest_distance;
+            front_distance = latest_distance;
             xSemaphoreGive(distance_mutex);
         }
 
         char message[50];
-        snprintf(message, sizeof(message), "f:%.2f", distance);
+        snprintf(message, sizeof(message), "l:%.2f;f:%.2f;r:%.2f",
+                 left_distance, front_distance, right_distance);
         mqtt_publish(SENSOR_DATA_TOPIC, message);
 
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
 
