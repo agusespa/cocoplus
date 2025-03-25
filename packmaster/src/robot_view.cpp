@@ -61,18 +61,11 @@ void RobotView::draw_sensor_cone(float cx, float cy, double angle,
     } else {
         color = {0, 255, 0, 255};  // Green
     }
-    float r = color.r / 255.0f;
-    float g = color.g / 255.0f;
-    float b = color.b / 255.0f;
-    float a = color.a / 255.0f;
 
-    SDL_Vertex v[3] = {
-        {cx, cy, {r, g, b, a}},  // Central vertex (robot direction)
-        {x1, y1, {r, g, b, a}},  // Left vertex
-        {x2, y2, {r, g, b, a}}   // Right vertex
-    };
-
-    SDL_RenderGeometry(renderer, NULL, v, 3, NULL, 0);
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderLine(renderer, cx, cy, x1, y1);
+    SDL_RenderLine(renderer, cx, cy, x2, y2);
+    SDL_RenderLine(renderer, x1, y1, x2, y2);
 }
 
 void RobotView::render() {
