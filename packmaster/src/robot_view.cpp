@@ -10,7 +10,7 @@ const double MAX_DISTANCE = 166.5;
 RobotView::RobotView(Controller& controller)
     : controller(controller), window(nullptr), renderer(nullptr) {
     SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Cocoplus", 720, 440, 0);
+    window = SDL_CreateWindow("Cocoplus", 720, 460, 0);
     renderer = SDL_CreateRenderer(window, NULL);
 }
 
@@ -40,6 +40,9 @@ void RobotView::draw_sensor_cone(float cx, float cy, double angle,
         distance = MAX_DISTANCE;
     }
 
+    float scale_factor = 3.0f;
+    distance *= scale_factor;
+
     double left_angle = (angle + FOV_DEGREES / 2.0) * DEG2RAD;
     double right_angle = (angle - FOV_DEGREES / 2.0) * DEG2RAD;
 
@@ -49,11 +52,11 @@ void RobotView::draw_sensor_cone(float cx, float cy, double angle,
     float y2 = cy + distance * sin(right_angle);
 
     SDL_Color color;
-    if (distance < 20) {
+    if (distance < 20 * scale_factor) {
         color = {255, 0, 0, 255};  // Red
-    } else if (distance < 40) {
+    } else if (distance < 40 * scale_factor) {
         color = {255, 165, 0, 255};  // Orange
-    } else if (distance < 60) {
+    } else if (distance < 60 * scale_factor) {
         color = {255, 255, 0, 255};  // Yellow
     } else {
         color = {0, 255, 0, 255};  // Green
@@ -69,7 +72,6 @@ void RobotView::draw_sensor_cone(float cx, float cy, double angle,
         {x2, y2, {r, g, b, a}}   // Right vertex
     };
 
-    // Draw the sensor cone using geometry
     SDL_RenderGeometry(renderer, NULL, v, 3, NULL, 0);
 }
 
@@ -83,7 +85,7 @@ void RobotView::render() {
     int windowWidth, windowHeight;
     SDL_GetWindowSize(window, &windowWidth, &windowHeight);
     float robot_x = windowWidth / 2.0f;
-    float robot_y = windowHeight - 80.f;
+    float robot_y = windowHeight - 90.f;
     float robot_size = 40.0f;
     SDL_FRect robot_rect = {robot_x - robot_size / 2, robot_y - robot_size / 2,
                             robot_size, robot_size};
