@@ -79,20 +79,19 @@ void log_pub_error_message(esp_err_t ret) {
 
 void obstacle_avoidance_task(void* pvParameters) {
     while (1) {
+        send_pulse();
+        uint32_t pulse_duration = measure_pulse();
+        float distance = (pulse_duration * SOUND_SPEED) / 2.0;
+
+        if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
+            latest_distance = distance;
+            xSemaphoreGive(distance_mutex);
+        }
+
+        // TODO: Implement logic to control the car's movement
         if (should_stop) {
             // TODO: implement start/stop
             /* stop_movement(); */
-        } else {
-            send_pulse();
-            uint32_t pulse_duration = measure_pulse();
-            float distance = (pulse_duration * SOUND_SPEED) / 2.0;
-
-            if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
-                latest_distance = distance;
-                xSemaphoreGive(distance_mutex);
-            }
-
-            // TODO: Implement logic to control the car's movement
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
