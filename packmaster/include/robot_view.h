@@ -15,6 +15,7 @@ class RobotView {
   void handle_events();
   void render();
   void draw_data(const DataParser::Data& data);
+  void draw_sensor_cone(float cx, float cy, double angle, double distance);
 
   Controller& controller;
 
