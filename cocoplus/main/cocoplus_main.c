@@ -82,9 +82,6 @@ void obstacle_avoidance_task(void* pvParameters) {
         if (should_stop) {
             // TODO: implement start/stop
             /* stop_movement(); */
-
-            // TODO remove after test
-            ESP_LOGE(TAG, "ROBOT SHOULD STOP");
         } else {
             send_pulse();
             uint32_t pulse_duration = measure_pulse();
@@ -113,9 +110,6 @@ void mqtt_publish_task(void* pvParameters) {
         char message[50];
         snprintf(message, sizeof(message), "f:%.2f", distance);
         mqtt_publish(SENSOR_DATA_TOPIC, message);
-
-        // TODO remove after test
-        ESP_LOGI(TAG, "Published distance %s", message);
 
         vTaskDelay(pdMS_TO_TICKS(500));
     }
