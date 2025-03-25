@@ -24,7 +24,7 @@ void RobotView::start() {
     while (controller.get_running()) {
         handle_events();
         render();
-        SDL_Delay(250);
+        SDL_Delay(32);
     }
 }
 
