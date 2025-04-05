@@ -13,8 +13,12 @@
 
 static const char* TAG = "COCO_MAIN";
 
-#define TRIG_PIN GPIO_NUM_14
-#define ECHO_PIN GPIO_NUM_15
+#define TRIG_PIN_LEFT GPIO_NUM_22
+#define ECHO_PIN_LEFT GPIO_NUM_23
+#define TRIG_PIN_FRONT GPIO_NUM_18
+#define ECHO_PIN_FRONT GPIO_NUM_19
+#define TRIG_PIN_RIGHT GPIO_NUM_32
+#define ECHO_PIN_RIGHT GPIO_NUM_33
 #define SOUND_SPEED 0.034
 #define TIMEOUT_US 50000
 
@@ -24,23 +28,23 @@ static const char* HEALTH_TOPIC = "cocoplus/health";
 static TaskHandle_t obstacle_avoidance_task_handle = NULL;
 static TaskHandle_t mqtt_publish_task_handle = NULL;
 
-static float latest_distance = 0.0;
+static float latest_distances[3] = {0.0, 0.0, 0.0};
 static SemaphoreHandle_t distance_mutex;
 
 bool should_stop = true;
 SemaphoreHandle_t controller_mutex;
 
-void send_pulse() {
-    gpio_set_level(TRIG_PIN, 1);
+void send_pulse(gpio_num_t trig_pin) {
+    gpio_set_level(trig_pin, 1);
     esp_rom_delay_us(10);
-    gpio_set_level(TRIG_PIN, 0);
+    gpio_set_level(trig_pin, 0);
 }
 
-uint32_t measure_pulse() {
+uint32_t measure_pulse(gpio_num_t echo_pin) {
     uint32_t start_time = esp_timer_get_time();
     uint32_t timeout_time = start_time + TIMEOUT_US;
 
-    while (gpio_get_level(ECHO_PIN) == 0) {
+    while (gpio_get_level(echo_pin) == 0) {
         if (esp_timer_get_time() > timeout_time) {
             ESP_LOGE("measure_pulse", "Timeout waiting for pulse start");
             return 0;
@@ -50,47 +54,38 @@ uint32_t measure_pulse() {
     start_time = esp_timer_get_time();
     timeout_time = start_time + TIMEOUT_US;
 
-    while (gpio_get_level(ECHO_PIN) == 1) {
+    while (gpio_get_level(echo_pin) == 1) {
         if (esp_timer_get_time() > timeout_time) {
             ESP_LOGE("measure_pulse", "Timeout waiting for pulse end");
             return 0;
         }
     }
 
-    uint32_t end_time = esp_timer_get_time();
-    return end_time - start_time;
+    return esp_timer_get_time() - start_time;
 }
 
-void log_pub_error_message(esp_err_t ret) {
-    char error_message[256];
-
-    const char* error_name = esp_err_to_name(ret);
-    if (error_name != NULL) {
-        snprintf(error_message, sizeof(error_message),
-                 "Failed to configure sensor GPIO: %s", error_name);
-    } else {
-        snprintf(error_message, sizeof(error_message),
-                 "Failed to configure sensor GPIO: Unknown Error Code");
-    }
-
-    ESP_LOGE(TAG, "%s", error_message);
-    mqtt_publish(HEALTH_TOPIC, error_message);
+float measure_distance(gpio_num_t trig_pin, gpio_num_t echo_pin) {
+    send_pulse(trig_pin);
+    uint32_t pulse_duration = measure_pulse(echo_pin);
+    return (pulse_duration * SOUND_SPEED) / 2.0;
 }
 
 void obstacle_avoidance_task(void* pvParameters) {
     while (1) {
-        send_pulse();
-        uint32_t pulse_duration = measure_pulse();
-        float distance = (pulse_duration * SOUND_SPEED) / 2.0;
+        float distances[3];
+        distances[0] = measure_distance(TRIG_PIN_LEFT, ECHO_PIN_LEFT);
+        distances[1] = measure_distance(TRIG_PIN_FRONT, ECHO_PIN_FRONT);
+        distances[2] = measure_distance(TRIG_PIN_RIGHT, ECHO_PIN_RIGHT);
 
         if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
-            latest_distance = distance;
+            for (int i = 0; i < 3; i++) {
+                latest_distances[i] = distances[i];
+            }
             xSemaphoreGive(distance_mutex);
         }
 
-        // TODO: Implement logic to control the car's movement
         if (should_stop) {
-            // TODO: implement start/stop
+            // TODO: Implement start/stop logic
             /* stop_movement(); */
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -98,13 +93,13 @@ void obstacle_avoidance_task(void* pvParameters) {
 }
 
 void mqtt_publish_task(void* pvParameters) {
-    float front_distance = 0.0;
-    float left_distance = 0.0;
-    float right_distance = 0.0;
-
     while (1) {
+        float left_distance = 0.0, front_distance = 0.0, right_distance = 0.0;
+
         if (xSemaphoreTake(distance_mutex, portMAX_DELAY)) {
-            front_distance = latest_distance;
+            left_distance = latest_distances[0];
+            front_distance = latest_distances[1];
+            right_distance = latest_distances[2];
             xSemaphoreGive(distance_mutex);
         }
 
@@ -126,58 +121,54 @@ void app_main() {
     }
     ESP_ERROR_CHECK(nvs_err);
 
-    ESP_LOGI(TAG, "Connecting to wi-fi ESP_WIFI_MODE_STA...");
-    wifi_status_t status = wifi_init_sta();
-    if (status == WIFI_STATUS_FAIL) {
-        ESP_LOGE(TAG, "Wi-Fi connection failed. Stopping execution.");
-        return;
-    }
-
-    esp_err_t mqtt_err = mqtt_app_start();
-    if (mqtt_err != ESP_OK) {
-        ESP_LOGE(TAG, "MQTT initialization failed. Stopping execution.");
-        return;
-    }
-
     gpio_config_t trig_config = {.mode = GPIO_MODE_OUTPUT,
                                  .pull_up_en = GPIO_PULLUP_DISABLE,
                                  .pull_down_en = GPIO_PULLDOWN_DISABLE,
                                  .intr_type = GPIO_INTR_DISABLE,
-                                 .pin_bit_mask = (1ULL << TRIG_PIN)};
-    esp_err_t ret = gpio_config(&trig_config);
-    if (ret != ESP_OK) {
-        log_pub_error_message(ret);
-        return;
-    }
+                                 .pin_bit_mask = (1ULL << TRIG_PIN_LEFT) |
+                                                 (1ULL << TRIG_PIN_FRONT) |
+                                                 (1ULL << TRIG_PIN_RIGHT)};
+    ESP_ERROR_CHECK(gpio_config(&trig_config));
 
     gpio_config_t echo_config = {.mode = GPIO_MODE_INPUT,
                                  .pull_up_en = GPIO_PULLUP_DISABLE,
                                  .pull_down_en = GPIO_PULLDOWN_DISABLE,
                                  .intr_type = GPIO_INTR_DISABLE,
-                                 .pin_bit_mask = (1ULL << ECHO_PIN)};
-    ret = gpio_config(&echo_config);
-    if (ret != ESP_OK) {
-        log_pub_error_message(ret);
-        return;
-    }
+                                 .pin_bit_mask = (1ULL << ECHO_PIN_LEFT) |
+                                                 (1ULL << ECHO_PIN_FRONT) |
+                                                 (1ULL << ECHO_PIN_RIGHT)};
+    ESP_ERROR_CHECK(gpio_config(&echo_config));
 
     distance_mutex = xSemaphoreCreateMutex();
     if (distance_mutex == NULL) {
         ESP_LOGE(TAG, "Failed to create mutex");
-        return;
+        abort();
     }
 
     controller_mutex = xSemaphoreCreateMutex();
     if (controller_mutex == NULL) {
         ESP_LOGE(TAG, "Failed to create mutex");
-        return;
+        abort();
     }
 
-    mqtt_publish(HEALTH_TOPIC, "startup completed successfully");
+    ESP_LOGI(TAG, "Connecting to Wi-Fi...");
+    wifi_status_t status = wifi_init_sta();
+    if (status == WIFI_STATUS_FAIL) {
+        ESP_LOGE("APP", "Wi-Fi connection failed. Stopping execution.");
+        abort();
+    }
+
+    esp_err_t mqtt_err = mqtt_app_start();
+    if (mqtt_err != ESP_OK) {
+        ESP_LOGE(TAG, "MQTT initialization failed. Stopping execution.");
+        abort();
+    }
+
+    mqtt_publish(HEALTH_TOPIC, "Startup completed successfully");
 
     xTaskCreate(obstacle_avoidance_task, "ObstacleAvoidanceTask", 4096, NULL,
                 10, &obstacle_avoidance_task_handle);
-
     xTaskCreate(mqtt_publish_task, "MQTTPublishTask", 4096, NULL, 3,
                 &mqtt_publish_task_handle);
 }
+

@@ -8,7 +8,7 @@
 static const char *TAG = "MQTT_CLIENT";
 
 static esp_mqtt_client_handle_t client;
-static const char *URI = "mqtt://192.168.1.100:1883";
+static const char *URI = "mqtt://192.168.1.66:1883";
 
 static const char *COMMAND_TOPIC = "controller/command";
 
@@ -24,7 +24,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT Disconnected");
-            // TODO Implement retry logic here if needed
+            ESP_LOGI(TAG, "Attempting to reconnect in 5 seconds...");
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            esp_mqtt_client_start(client);
             break;
         case MQTT_EVENT_SUBSCRIBED:
             if (event->topic != NULL) {
@@ -106,7 +108,7 @@ esp_err_t mqtt_app_start(void) {
         return err;
     }
 
-    ESP_LOGI(TAG, "MQTT client started successfully");
+    ESP_LOGI(TAG, "MQTT client started successfully, waiting for connection...");
     return ESP_OK;
 }
 
