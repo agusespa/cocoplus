@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "../../cocoplus_main.h"
+#include "../../main/cocoplus_main.h"
 #include "esp_log.h"
 
 static const char *TAG = "MQTT_CLIENT";
