@@ -2,8 +2,9 @@
 
 #include <stdio.h>
 
+#include "../components/motors/driver.h"
 #include "../components/mqtt_client/my_mqtt_client.h"
-#include "../components/sensors/sensors.h"
+#include "../components/sensors/distance.h"
 #include "../components/wifi_utils/wifi_utils.h"
 #include "../tasks/drive.h"
 #include "../tasks/publish.h"
@@ -27,10 +28,16 @@ void app_main() {
     }
     ESP_ERROR_CHECK(nvs_err);
 
-    esp_err_t sensor_init_result = sensors_init();
+    esp_err_t sensor_init_result = distance_sensors_init();
     if (sensor_init_result != ESP_OK) {
         ESP_LOGE(TAG, "Sensor initialization failed. Stopping main execution.");
         abort();
+    }
+
+    esp_err_t motor_init_result = motor_init();
+    if (motor_init_result != ESP_OK) {
+        ESP_LOGE(TAG, "Motor initialization failed. Stopping main execution.");
+        return;
     }
 
     controller_mutex = xSemaphoreCreateMutex();
@@ -55,8 +62,7 @@ void app_main() {
 
     mqtt_publish(HEALTH_TOPIC, "Startup completed successfully");
 
-    xTaskCreate(drive_task, "DriveTask", 4096, NULL, 10,
-                &drive_task_handle);
+    xTaskCreate(drive_task, "DriveTask", 4096, NULL, 10, &drive_task_handle);
     xTaskCreate(publish_task, "MQTTPublishTask", 4096, NULL, 3,
                 &publish_task_handle);
 }
