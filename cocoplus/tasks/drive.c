@@ -1,13 +1,27 @@
 #include "drive.h"
 
+#include <string.h>
+
 #include "../components/motors/driver.h"
 #include "../components/sensors/distance.h"
 #include "../main/cocoplus_main.h"
-#include <string.h>
 
 static const char* TAG = "DRIVE_TASK";
 
-#define FORWARD_DISTANCE_THRESHOLD 30.0f
+#define FORWARD_DISTANCE_THRESHOLD 40.0f
+#define MIN_DISTANCE 20.0f
+
+static int compute_proportional_speed(float distance_cm) {
+    if (distance_cm <= MIN_DISTANCE) {
+        return 0;
+    } else if (distance_cm >= FORWARD_DISTANCE_THRESHOLD) {
+        return BASE_SPEED;
+    } else {
+        float ratio = (distance_cm - MIN_DISTANCE) /
+                      (FORWARD_DISTANCE_THRESHOLD - MIN_DISTANCE);
+        return (int)(BASE_SPEED * ratio);
+    }
+}
 
 void drive_task(void* pvParameters) {
     float distances[3];
@@ -19,16 +33,11 @@ void drive_task(void* pvParameters) {
         }
 
         if (!should_stop) {
-            if (latest_distances[1] > FORWARD_DISTANCE_THRESHOLD) {
-                set_motor_direction(MOTOR_LEFT, MOTOR_FORWARD);
-                set_motor_direction(MOTOR_RIGHT, MOTOR_FORWARD);
-            } else {
-                set_motor_direction(MOTOR_LEFT, MOTOR_STOP);
-                set_motor_direction(MOTOR_RIGHT, MOTOR_STOP);
-            }
+            float front_distance = distances[1];
+            int speed = compute_proportional_speed(front_distance);
+            drive_robot(speed, 0);
         } else {
-            set_motor_direction(MOTOR_LEFT, MOTOR_STOP);
-            set_motor_direction(MOTOR_RIGHT, MOTOR_STOP);
+            drive_robot(0, 0);
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));

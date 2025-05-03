@@ -1,68 +1,129 @@
 #include "driver.h"
 
+#include "driver/ledc.h"
 #include "esp_log.h"
 
 static const char* TAG = "MOTOR_DRIVER";
 
-esp_err_t motor_init() {
-    gpio_config_t motor1_pins = {
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-        .pin_bit_mask = (1ULL << MOTOR0_PIN1) | (1ULL << MOTOR0_PIN2)};
-    esp_err_t err1 = gpio_config(&motor1_pins);
-    if (err1 != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure Left Motor pins: %d", err1);
-        return err1;
-    }
-    gpio_set_level(MOTOR0_PIN1, 0);
-    gpio_set_level(MOTOR0_PIN2, 0);
-    ESP_LOGI(TAG, "Left Motor pins initialized to STOP.");
+#define MOTOR0_PIN1 GPIO_NUM_14  // Left Motor direction pin 1
+#define MOTOR0_PIN2 GPIO_NUM_12  // Left Motor direction pin 2
+#define MOTOR1_PIN1 GPIO_NUM_5   // Right Motor direction pin 1
+#define MOTOR1_PIN2 GPIO_NUM_17  // Right Motor direction pin 2
 
-    gpio_config_t motor2_pins = {
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-        .pin_bit_mask = (1ULL << MOTOR1_PIN1) | (1ULL << MOTOR1_PIN2)};
-    esp_err_t err2 = gpio_config(&motor2_pins);
-    if (err2 != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure Right Motor pins: %d", err2);
-        return err2;
+#define LEDC_CHANNEL_M0_PIN1 LEDC_CHANNEL_0
+#define LEDC_CHANNEL_M0_PIN2 LEDC_CHANNEL_1
+#define LEDC_CHANNEL_M1_PIN1 LEDC_CHANNEL_2
+#define LEDC_CHANNEL_M1_PIN2 LEDC_CHANNEL_3
+
+#define LEDC_TIMER LEDC_TIMER_0
+#define LEDC_MODE LEDC_LOW_SPEED_MODE
+#define LEDC_DUTY_RES LEDC_TIMER_10_BIT
+#define LEDC_FREQUENCY 1000
+
+#define MAX_DUTY ((1 << LEDC_DUTY_RES) - 1)  // 1023
+#define MIN_DUTY 386
+
+typedef enum { MOTOR_LEFT, MOTOR_RIGHT } motor_id_t;
+typedef enum { FORWARD = 1, BACKWARD = -1, STOP = 0 } motor_direction_t;
+
+static int normalize_duty(int speed) {
+    if (speed == 0) return 0;
+
+    if (speed > MAX_DUTY) speed = MAX_DUTY;
+    if (speed < -MAX_DUTY) speed = -MAX_DUTY;
+
+    if (speed > 0 && speed < MIN_DUTY) return MIN_DUTY;
+    if (speed < 0 && speed > -MIN_DUTY) return -MIN_DUTY;
+
+    return speed;
+}
+
+esp_err_t motor_init() {
+    ledc_timer_config_t timer = {
+        .speed_mode = LEDC_MODE,
+        .duty_resolution = LEDC_DUTY_RES,
+        .timer_num = LEDC_TIMER,
+        .freq_hz = LEDC_FREQUENCY,
+        .clk_cfg = LEDC_AUTO_CLK,
+    };
+    ESP_ERROR_CHECK(ledc_timer_config(&timer));
+
+    ledc_channel_config_t channels[] = {
+        {.channel = LEDC_CHANNEL_M0_PIN1,
+         .gpio_num = MOTOR0_PIN1,
+         .duty = 0,
+         .timer_sel = LEDC_TIMER},
+        {.channel = LEDC_CHANNEL_M0_PIN2,
+         .gpio_num = MOTOR0_PIN2,
+         .duty = 0,
+         .timer_sel = LEDC_TIMER},
+        {.channel = LEDC_CHANNEL_M1_PIN1,
+         .gpio_num = MOTOR1_PIN1,
+         .duty = 0,
+         .timer_sel = LEDC_TIMER},
+        {.channel = LEDC_CHANNEL_M1_PIN2,
+         .gpio_num = MOTOR1_PIN2,
+         .duty = 0,
+         .timer_sel = LEDC_TIMER},
+    };
+
+    for (int i = 0; i < 4; i++) {
+        channels[i].speed_mode = LEDC_MODE;
+        channels[i].hpoint = 0;
+        ESP_ERROR_CHECK(ledc_channel_config(&channels[i]));
     }
-    gpio_set_level(MOTOR1_PIN1, 0);
-    gpio_set_level(MOTOR1_PIN2, 0);
-    ESP_LOGI(TAG, "Right Motor pins initialized to STOP.");
 
     return ESP_OK;
 }
 
-void set_motor_direction(motor_id_t motor_id, motor_direction_t direction) {
-    gpio_num_t pin1, pin2;
+esp_err_t drive_motor(motor_id_t motor, motor_direction_t direction,
+                      int speed) {
+    speed = normalize_duty(speed);
 
-    if (motor_id == MOTOR_LEFT) {
-        pin1 = MOTOR0_PIN1;
-        pin2 = MOTOR0_PIN2;
-    } else if (motor_id == MOTOR_RIGHT) {
-        pin1 = MOTOR1_PIN1;
-        pin2 = MOTOR1_PIN2;
-    } else {
-        ESP_LOGE(TAG, "Invalid motor ID: %d", motor_id);
-        return;
+    int pin1 =
+        (motor == MOTOR_LEFT) ? LEDC_CHANNEL_M0_PIN1 : LEDC_CHANNEL_M1_PIN1;
+    int pin2 =
+        (motor == MOTOR_LEFT) ? LEDC_CHANNEL_M0_PIN2 : LEDC_CHANNEL_M1_PIN2;
+
+    esp_err_t ret = ESP_OK;
+
+    if (direction == STOP) {
+        ret |= ledc_set_duty(LEDC_MODE, pin1, 0);
+        ret |= ledc_update_duty(LEDC_MODE, pin1);
+        ret |= ledc_set_duty(LEDC_MODE, pin2, 0);
+        ret |= ledc_update_duty(LEDC_MODE, pin2);
+    } else if (direction == FORWARD) {
+        ret |= ledc_set_duty(LEDC_MODE, pin1, speed);
+        ret |= ledc_update_duty(LEDC_MODE, pin1);
+        ret |= ledc_set_duty(LEDC_MODE, pin2, 0);
+        ret |= ledc_update_duty(LEDC_MODE, pin2);
+    } else if (direction == BACKWARD) {
+        ret |= ledc_set_duty(LEDC_MODE, pin1, 0);
+        ret |= ledc_update_duty(LEDC_MODE, pin1);
+        ret |= ledc_set_duty(LEDC_MODE, pin2, speed);
+        ret |= ledc_update_duty(LEDC_MODE, pin2);
     }
 
-    if (direction == MOTOR_FORWARD) {
-        gpio_set_level(pin1, 1);
-        gpio_set_level(pin2, 0);
-    } else if (direction == MOTOR_BACKWARD) {
-        gpio_set_level(pin1, 0);
-        gpio_set_level(pin2, 1);
-    } else if (direction == MOTOR_STOP) {
-        gpio_set_level(pin1, 0);
-        gpio_set_level(pin2, 0);
-    } else {
-        ESP_LOGE(TAG, "Invalid direction for motor %d: %d", motor_id,
-                 direction);
-    }
+    return ret;
 }
+
+esp_err_t drive_robot(int linear_speed, int steering_diff) {
+    int left_speed = linear_speed - steering_diff;
+    int right_speed = linear_speed + steering_diff;
+
+    esp_err_t ret = ESP_OK;
+
+    if (left_speed == 0 && right_speed == 0) {
+        ret |= drive_motor(MOTOR_LEFT, STOP, 0);
+        ret |= drive_motor(MOTOR_RIGHT, STOP, 0);
+        return ret;
+    }
+
+    int left_dir = (left_speed >= 0) ? FORWARD : BACKWARD;
+    int right_dir = (right_speed >= 0) ? FORWARD : BACKWARD;
+
+    ret |= drive_motor(MOTOR_LEFT, left_dir, left_speed);
+    ret |= drive_motor(MOTOR_RIGHT, right_dir, right_speed);
+    return ret;
+}
+
