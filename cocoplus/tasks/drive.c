@@ -11,15 +11,14 @@ static const char* TAG = "DRIVE_TASK";
 #define FORWARD_DISTANCE_THRESHOLD 40.0f
 #define MIN_DISTANCE 20.0f
 
-static int compute_proportional_speed(float distance_cm) {
+static float compute_proportional_speed(float distance_cm) {
     if (distance_cm <= MIN_DISTANCE) {
-        return 0;
+        return 0.0f;
     } else if (distance_cm >= FORWARD_DISTANCE_THRESHOLD) {
-        return BASE_SPEED;
+        return 0.8f;
     } else {
-        float ratio = (distance_cm - MIN_DISTANCE) /
-                      (FORWARD_DISTANCE_THRESHOLD - MIN_DISTANCE);
-        return (int)(BASE_SPEED * ratio);
+        return (distance_cm - MIN_DISTANCE) /
+               (FORWARD_DISTANCE_THRESHOLD - MIN_DISTANCE);
     }
 }
 
@@ -34,8 +33,8 @@ void drive_task(void* pvParameters) {
 
         if (!should_stop) {
             float front_distance = distances[1];
-            int speed = compute_proportional_speed(front_distance);
-            drive_robot(speed, 0);
+            int ratio = compute_proportional_speed(front_distance);
+            drive_robot(ratio, 0);
         } else {
             drive_robot(0, 0);
         }

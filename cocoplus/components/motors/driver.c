@@ -22,20 +22,20 @@ static const char* TAG = "MOTOR_DRIVER";
 
 #define MAX_DUTY ((1 << LEDC_DUTY_RES) - 1)  // 1023
 #define MIN_DUTY 386
+#define PWM_RANGE 635
 
 typedef enum { MOTOR_LEFT, MOTOR_RIGHT } motor_id_t;
 typedef enum { FORWARD = 1, BACKWARD = -1, STOP = 0 } motor_direction_t;
 
-static int normalize_duty(int speed) {
-    if (speed == 0) return 0;
-
-    if (speed > MAX_DUTY) speed = MAX_DUTY;
-    if (speed < -MAX_DUTY) speed = -MAX_DUTY;
-
-    if (speed > 0 && speed < MIN_DUTY) return MIN_DUTY;
-    if (speed < 0 && speed > -MIN_DUTY) return -MIN_DUTY;
-
-    return speed;
+static int normalize_duty(float ratio) {
+    if (ratio <= 0.0f) {
+        return 0;
+    } else if (ratio >= 1.0f) {
+        return MAX_DUTY;
+    } else {
+        float pwm_value = (ratio * PWM_RANGE) + MIN_DUTY;
+        return (int)pwm_value;
+    }
 }
 
 esp_err_t motor_init() {
@@ -76,10 +76,7 @@ esp_err_t motor_init() {
     return ESP_OK;
 }
 
-esp_err_t drive_motor(motor_id_t motor, motor_direction_t direction,
-                      int speed) {
-    speed = normalize_duty(speed);
-
+void drive_motor(motor_id_t motor, motor_direction_t direction, int speed) {
     int pin1 =
         (motor == MOTOR_LEFT) ? LEDC_CHANNEL_M0_PIN1 : LEDC_CHANNEL_M1_PIN1;
     int pin2 =
@@ -87,6 +84,7 @@ esp_err_t drive_motor(motor_id_t motor, motor_direction_t direction,
 
     esp_err_t ret = ESP_OK;
 
+    // TODO improve this mess
     if (direction == STOP) {
         ret |= ledc_set_duty(LEDC_MODE, pin1, 0);
         ret |= ledc_update_duty(LEDC_MODE, pin1);
@@ -104,26 +102,24 @@ esp_err_t drive_motor(motor_id_t motor, motor_direction_t direction,
         ret |= ledc_update_duty(LEDC_MODE, pin2);
     }
 
-    return ret;
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error setting motor duty: %d", ret);
+    }
 }
 
-esp_err_t drive_robot(int linear_speed, int steering_diff) {
-    int left_speed = linear_speed - steering_diff;
-    int right_speed = linear_speed + steering_diff;
+void drive_robot(int pwm_ratio, int steering_diff) {
+    int left_pwm = normalize_duty(pwm_ratio);
+    int right_pwm = normalize_duty(pwm_ratio);
 
-    esp_err_t ret = ESP_OK;
+    if (left_pwm == 0 && right_pwm == 0) {
+        drive_motor(MOTOR_LEFT, STOP, 0);
+        drive_motor(MOTOR_RIGHT, STOP, 0);
+    } else {
+        int left_dir = (left_pwm >= 0) ? FORWARD : BACKWARD;
+        int right_dir = (right_pwm >= 0) ? FORWARD : BACKWARD;
 
-    if (left_speed == 0 && right_speed == 0) {
-        ret |= drive_motor(MOTOR_LEFT, STOP, 0);
-        ret |= drive_motor(MOTOR_RIGHT, STOP, 0);
-        return ret;
+        drive_motor(MOTOR_LEFT, left_dir, left_pwm);
+        drive_motor(MOTOR_RIGHT, right_dir, right_pwm);
     }
-
-    int left_dir = (left_speed >= 0) ? FORWARD : BACKWARD;
-    int right_dir = (right_speed >= 0) ? FORWARD : BACKWARD;
-
-    ret |= drive_motor(MOTOR_LEFT, left_dir, left_speed);
-    ret |= drive_motor(MOTOR_RIGHT, right_dir, right_speed);
-    return ret;
 }
 
