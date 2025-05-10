@@ -7,6 +7,6 @@
 #define BASE_SPEED 768
 
 esp_err_t motor_init();
-void drive_robot(int linear_speed, int steering_diff);
+void drive_robot(float pwm_ratio, int steering_diff);
 
 #endif  // MOTOR_DRIVER_H

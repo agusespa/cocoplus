@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    MqttClient mqtt_client("robot_controller", "192.168.1.115", 1883);
+    MqttClient mqtt_client("robot_controller", "192.168.1.120", 1883);
 
     std::cout << "Connecting to MQTT broker..." << std::endl;
     if (!mqtt_client.connect()) {

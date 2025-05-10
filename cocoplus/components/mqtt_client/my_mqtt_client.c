@@ -8,7 +8,7 @@
 static const char *TAG = "MQTT_CLIENT";
 
 static esp_mqtt_client_handle_t client;
-static const char *URI = "mqtt://192.168.1.115:1883";
+static const char *URI = "mqtt://192.168.1.120:1883";
 
 static const char *COMMAND_TOPIC = "controller/command";
 

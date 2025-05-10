@@ -5,10 +5,10 @@
 
 static const char* TAG = "MOTOR_DRIVER";
 
-#define MOTOR0_PIN1 GPIO_NUM_14  // Left Motor direction pin 1
-#define MOTOR0_PIN2 GPIO_NUM_12  // Left Motor direction pin 2
-#define MOTOR1_PIN1 GPIO_NUM_5   // Right Motor direction pin 1
-#define MOTOR1_PIN2 GPIO_NUM_17  // Right Motor direction pin 2
+#define MOTOR0_PIN1 GPIO_NUM_5   // Left Motor direction pin 1
+#define MOTOR0_PIN2 GPIO_NUM_17  // Left Motor direction pin 2
+#define MOTOR1_PIN1 GPIO_NUM_14  // Right Motor direction pin 1
+#define MOTOR1_PIN2 GPIO_NUM_12  // Right Motor direction pin 2
 
 #define LEDC_CHANNEL_M0_PIN1 LEDC_CHANNEL_0
 #define LEDC_CHANNEL_M0_PIN2 LEDC_CHANNEL_1
@@ -77,6 +77,7 @@ esp_err_t motor_init() {
 }
 
 void drive_motor(motor_id_t motor, motor_direction_t direction, int speed) {
+    ESP_LOGE(TAG, "Speed for motor %d: %d", motor, speed);
     int pin1 =
         (motor == MOTOR_LEFT) ? LEDC_CHANNEL_M0_PIN1 : LEDC_CHANNEL_M1_PIN1;
     int pin2 =
@@ -107,19 +108,19 @@ void drive_motor(motor_id_t motor, motor_direction_t direction, int speed) {
     }
 }
 
-void drive_robot(int pwm_ratio, int steering_diff) {
+void drive_robot(float pwm_ratio, int steering_diff) {
+    if (pwm_ratio == 0.0) {
+        drive_motor(MOTOR_LEFT, STOP, 0);
+        drive_motor(MOTOR_RIGHT, STOP, 0);
+        return;
+    }
+
     int left_pwm = normalize_duty(pwm_ratio);
     int right_pwm = normalize_duty(pwm_ratio);
 
-    if (left_pwm == 0 && right_pwm == 0) {
-        drive_motor(MOTOR_LEFT, STOP, 0);
-        drive_motor(MOTOR_RIGHT, STOP, 0);
-    } else {
-        int left_dir = (left_pwm >= 0) ? FORWARD : BACKWARD;
-        int right_dir = (right_pwm >= 0) ? FORWARD : BACKWARD;
+    int left_dir = (left_pwm >= 0) ? FORWARD : BACKWARD;
+    int right_dir = (right_pwm >= 0) ? FORWARD : BACKWARD;
 
-        drive_motor(MOTOR_LEFT, left_dir, left_pwm);
-        drive_motor(MOTOR_RIGHT, right_dir, right_pwm);
-    }
+    drive_motor(MOTOR_LEFT, left_dir, left_pwm);
+    drive_motor(MOTOR_RIGHT, right_dir, right_pwm);
 }
-
